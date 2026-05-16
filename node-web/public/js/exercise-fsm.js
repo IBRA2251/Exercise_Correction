@@ -204,7 +204,11 @@ class ExerciseSession {
         let a = [landmarks[ia].x*w, landmarks[ia].y*h];
         let b = [landmarks[ib].x*w, landmarks[ib].y*h];
         let c = [landmarks[ic].x*w, landmarks[ic].y*h];
-        let angle = calculateAngle(a, b, c);
+        const localAngle = calculateAngle(a, b, c);
+        let angle = localAngle;
+
+        // Track which arm/joint is more engaged — starts as primary, may switch to opposite
+        let activeJointIdx = jointDef[1];
 
         // Opposite-joint tracking — only use if the joint is well-detected
         // (a poorly-detected opposite joint can lock the rep state machine)
@@ -223,9 +227,11 @@ class ExerciseSession {
                     [landmarks[oc].x*w, landmarks[oc].y*h]
                 );
                 if (this.config.direction === 'decrease_then_increase' || this.config.type === 'yoga') {
-                    angle = Math.min(angle, oppAngle);
+                    if (oppAngle < localAngle) activeJointIdx = JOINTS[oppJoint][1];
+                    angle = Math.min(localAngle, oppAngle);
                 } else {
-                    angle = Math.max(angle, oppAngle);
+                    if (oppAngle > localAngle) activeJointIdx = JOINTS[oppJoint][1];
+                    angle = Math.max(localAngle, oppAngle);
                 }
             }
         }
@@ -287,13 +293,14 @@ class ExerciseSession {
 
         return {
             stage,
-            angle:        Math.round(angle * 10) / 10,
-            speed:        Math.round(speed),
+            angle:         Math.round(angle * 10) / 10,
+            speed:         Math.round(speed),
             repCompleted,
-            repCount:     this.repCount,
+            repCount:      this.repCount,
             repEvaluation,
             quality,
-            elapsed:      this.getFormattedTime(),
+            elapsed:       this.getFormattedTime(),
+            activeJointIdx,
         };
     }
 

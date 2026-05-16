@@ -377,6 +377,35 @@ async function initCoachPage(exerciseId) {
 async function startSession() {
     if (!S.exercise) return;
 
+    // Reinit camera if it was stopped after a previous session
+    if (!S.poseEngine || !S.poseEngine.isReady) {
+        const loadingEl = document.getElementById('video-loading');
+        if (loadingEl) {
+            loadingEl.innerHTML = '<div style="text-align:center;padding:1rem">Starting camera…</div>';
+            loadingEl.style.display = 'flex';
+        }
+        S.poseEngine = new PoseEngine();
+        const jDef = JOINTS[S.exercise.primary_angle];
+        if (jDef) S.poseEngine.primaryJointIdx = jDef[1];
+        try {
+            await S.poseEngine.init(
+                document.getElementById('webcam-video'),
+                document.getElementById('pose-canvas')
+            );
+        } catch(err) {
+            if (loadingEl) {
+                loadingEl.innerHTML = `<div style="text-align:center;padding:2rem">
+                    <div style="font-size:3rem;margin-bottom:1rem">📷</div>
+                    <h3>Camera Access Required</h3>
+                    <p style="color:var(--text-secondary);margin-bottom:1rem">
+                        Allow camera access to use the AI coach.
+                    </p>
+                </div>`;
+            }
+            return;
+        }
+    }
+
     S.session    = new ExerciseSession(S.exercise, S.model);
     S.feedback.reset();
     S.feedback.unlockAudio();   // unlock synth from this user-gesture context
@@ -412,7 +441,13 @@ async function startSession() {
         _dispSpeed = _dispSpeed * (1 - DISP_ALPHA_SPEED) + result.speed * DISP_ALPHA_SPEED;
 
         // Update canvas angle label with the smoothed value (less jitter)
-        if (S.poseEngine) S.poseEngine.currentAngle = _dispAngle;
+        if (S.poseEngine) {
+            S.poseEngine.currentAngle = _dispAngle;
+            // Track whichever arm is currently more active (enables either-arm detection)
+            if (result.activeJointIdx !== undefined) {
+                S.poseEngine.primaryJointIdx = result.activeJointIdx;
+            }
+        }
 
         const displayResult = Object.assign({}, result, {
             angle: Math.round(_dispAngle * 10) / 10,
@@ -478,7 +513,23 @@ function stopSession() {
     clearInterval(S.timer);
     stopAvatarRef();
 
-    if (S.poseEngine) S.poseEngine.onResults = null;
+    // Stop camera and release hardware (mic/camera indicator goes off)
+    if (S.poseEngine) {
+        S.poseEngine.onResults = null;
+        S.poseEngine.stop();
+        S.poseEngine = null;
+    }
+
+    // Show "session ended" placeholder in video area
+    const loadingEl = document.getElementById('video-loading');
+    if (loadingEl) {
+        loadingEl.innerHTML = `<div style="text-align:center;padding:2rem">
+            <div style="font-size:3rem;margin-bottom:1rem">✅</div>
+            <h3 style="margin-bottom:.5rem">Session Complete</h3>
+            <p style="color:var(--text-secondary)">Press <strong>Start Session</strong> to train again</p>
+        </div>`;
+        loadingEl.style.display = 'flex';
+    }
 
     setText('session-status-badge', 'DONE');
     setClass('session-status-badge', '');

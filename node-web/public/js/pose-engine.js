@@ -51,12 +51,17 @@ class PoseEngine {
 
         this.pose.onResults((r) => this._handleResults(r));
 
+        // Portrait dimensions on mobile so the full body fits without heavy crop
+        const isMobile = window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent);
+        const camW = isMobile ? 480 : 1280;
+        const camH = isMobile ? 640 : 720;
+
         this.camera = new Camera(videoElement, {
             onFrame: async () => {
                 if (this.pose) await this.pose.send({ image: videoElement });
             },
-            width:  1280,
-            height: 720,
+            width:  camW,
+            height: camH,
         });
 
         await this.camera.start();
@@ -69,11 +74,23 @@ class PoseEngine {
     _handleResults(results) {
         if (!this.canvasEl || !this.ctx) return;
 
-        this.canvasEl.width  = this.videoEl.videoWidth  || 1280;
-        this.canvasEl.height = this.videoEl.videoHeight || 720;
+        // Size canvas to its CSS display container so the overlay matches layout
+        const cW = this.canvasEl.offsetWidth  || 1280;
+        const cH = this.canvasEl.offsetHeight || 720;
+        this.canvasEl.width  = cW;
+        this.canvasEl.height = cH;
+
+        // Compute object-fit:cover mapping from video space → canvas space
+        const vidW = this.videoEl.videoWidth  || 1280;
+        const vidH = this.videoEl.videoHeight || 720;
+        const scale   = Math.max(cW / vidW, cH / vidH);
+        const renderW = vidW * scale;
+        const renderH = vidH * scale;
+        const offsetX = (cW - renderW) / 2;   // negative = video cropped on sides
+        const offsetY = (cH - renderH) / 2;   // negative = video cropped on top/bottom
 
         const ctx = this.ctx;
-        ctx.clearRect(0, 0, this.canvasEl.width, this.canvasEl.height);
+        ctx.clearRect(0, 0, cW, cH);
 
         // FPS
         this.frameCount++;
@@ -87,20 +104,16 @@ class PoseEngine {
         }
 
         if (results.poseLandmarks) {
-            this._drawSkeleton(ctx, results.poseLandmarks,
-                this.canvasEl.width, this.canvasEl.height);
+            this._drawSkeleton(ctx, results.poseLandmarks, renderW, renderH, offsetX, offsetY);
         }
 
         if (this.onResults) {
-            this.onResults(
-                results.poseLandmarks || null,
-                this.canvasEl.width,
-                this.canvasEl.height
-            );
+            // Pass video native size for accurate angle math in processFrame
+            this.onResults(results.poseLandmarks || null, vidW, vidH);
         }
     }
 
-    _drawSkeleton(ctx, landmarks, w, h) {
+    _drawSkeleton(ctx, landmarks, renderW, renderH, offsetX, offsetY) {
         ctx.save();
 
         // ─── Connections ──────────────────────────────────────────
@@ -115,8 +128,8 @@ class PoseEngine {
                 const a = landmarks[i], b = landmarks[j];
                 if ((a.visibility ?? 1) > 0.4 && (b.visibility ?? 1) > 0.4) {
                     ctx.beginPath();
-                    ctx.moveTo(a.x*w, a.y*h);
-                    ctx.lineTo(b.x*w, b.y*h);
+                    ctx.moveTo(a.x*renderW + offsetX, a.y*renderH + offsetY);
+                    ctx.lineTo(b.x*renderW + offsetX, b.y*renderH + offsetY);
                     ctx.stroke();
                 }
             }
@@ -130,17 +143,19 @@ class PoseEngine {
             const lm = landmarks[i];
             if ((lm.visibility ?? 1) > 0.4) {
                 const isPrimary = (i === this.primaryJointIdx);
+                const px = lm.x*renderW + offsetX;
+                const py = lm.y*renderH + offsetY;
                 // Outer glow
                 ctx.fillStyle = isPrimary
                     ? 'rgba(245,158,11,0.35)'
                     : 'rgba(6,182,212,0.25)';
                 ctx.beginPath();
-                ctx.arc(lm.x*w, lm.y*h, isPrimary ? 12 : 8, 0, Math.PI*2);
+                ctx.arc(px, py, isPrimary ? 12 : 8, 0, Math.PI*2);
                 ctx.fill();
                 // Inner point
                 ctx.fillStyle = isPrimary ? '#f59e0b' : '#06b6d4';
                 ctx.beginPath();
-                ctx.arc(lm.x*w, lm.y*h, isPrimary ? 6 : 4, 0, Math.PI*2);
+                ctx.arc(px, py, isPrimary ? 6 : 4, 0, Math.PI*2);
                 ctx.fill();
             }
         }
@@ -153,7 +168,8 @@ class PoseEngine {
                 ctx.fillStyle = '#f59e0b';
                 ctx.shadowColor = 'rgba(245,158,11,0.6)';
                 ctx.shadowBlur  = 10;
-                ctx.fillText(`${Math.round(this.currentAngle)}°`, lm.x*w + 14, lm.y*h - 10);
+                ctx.fillText(`${Math.round(this.currentAngle)}°`,
+                    lm.x*renderW + offsetX + 14, lm.y*renderH + offsetY - 10);
             }
         }
 
