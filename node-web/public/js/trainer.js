@@ -19,9 +19,10 @@ const TRAINER_PRIMARY_JOINT = {
     squat:      'left_knee',
     pushup:     'left_elbow',
     bicep_curl: 'left_elbow',
+    pullup:     'left_elbow',
+    lunge:      'left_knee',
     boxing:     'right_elbow',
     yoga:       'left_knee',
-    pullup:     'left_elbow',
     stretching: 'left_knee',
 };
 

@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>FormAI — AI Exercise Coach</title>
-    <meta name="description" content="Real-time AI exercise form correction. Perfect your squats, push-ups, curls, boxing, and yoga with instant visual and voice feedback.">
+    <title>FormAI — AI Exercise Coach for Gyms</title>
+    <meta name="description" content="AI-powered exercise coaching for gyms. Real-time form correction, rep counting, and voice feedback. No personal trainer needed.">
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,6 +29,22 @@
 <!-- ═══ Particle Background ═══ -->
 <canvas id="particle-canvas"></canvas>
 
+<!-- ═══ User Name Modal (first visit) ═══ -->
+<div class="name-modal-overlay" id="name-modal" style="display:none">
+    <div class="name-modal">
+        <div class="name-modal-icon">👋</div>
+        <h2>Welcome to FormAI</h2>
+        <p>Enter your name so your coach can personalise your sessions and track your personal records.</p>
+        <input type="text" class="name-input" id="name-input" placeholder="Your name" maxlength="30" autocomplete="off">
+        <button class="btn btn-primary" id="btn-save-name">Let's Train</button>
+    </div>
+</div>
+
+<!-- ═══ PR Toast ═══ -->
+<div class="pr-toast" id="pr-toast">
+    <span>🏆</span><span id="pr-toast-text">New Personal Record!</span>
+</div>
+
 <!-- ═══ Navigation ═══ -->
 <nav id="main-nav">
     <div class="nav-inner">
@@ -39,10 +55,12 @@
         <div class="nav-links">
             <a href="#home"      class="nav-link active" data-page="home">Home</a>
             <a href="#exercises" class="nav-link" data-page="exercises">Exercises</a>
+            <a href="#programs"  class="nav-link" data-page="programs">Programs</a>
             <a href="#dashboard" class="nav-link" data-page="dashboard">Dashboard</a>
             <a href="#admin"     class="nav-link nav-link-admin" data-page="admin">⚙ Train</a>
         </div>
         <div class="nav-actions">
+            <span class="nav-username" id="nav-username"></span>
             <span class="nav-status" id="nav-status"></span>
         </div>
     </div>
@@ -58,27 +76,27 @@
         <div class="hero-content">
             <div class="hero-badge">
                 <span class="hero-badge-dot"></span>
-                AI-POWERED COACHING
+                AI-POWERED GYM COACHING
             </div>
             <h1 class="hero-title">
-                Perfect Your<br>
-                <span class="hero-gradient">Exercise Form</span><br>
-                with AI
+                Your Gym's<br>
+                <span class="hero-gradient">Personal AI</span><br>
+                Trainer
             </h1>
             <p class="hero-subtitle">
-                Real-time pose estimation and instant corrective feedback powered by computer vision.
-                Train smarter, safer, and more effectively — no personal trainer needed.
+                Real-time form correction, rep counting, and voice coaching for every gym member —
+                powered by computer vision. No personal trainer needed.
             </p>
             <div class="hero-cta">
                 <a href="#exercises" class="btn btn-primary btn-lg">
                     Start Training
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 </a>
-                <a href="#dashboard" class="btn btn-glass btn-lg">View Progress</a>
+                <a href="#programs" class="btn btn-glass btn-lg">View Programs</a>
             </div>
             <div class="hero-stats">
                 <div class="hero-stat">
-                    <span class="hero-stat-value" data-count="5">0</span>
+                    <span class="hero-stat-value" data-count="7">0</span>
                     <span class="hero-stat-label">Exercises</span>
                 </div>
                 <div class="hero-stat">
@@ -96,10 +114,10 @@
             </div>
         </div>
         <div class="hero-visual">
-            <div class="hero-skeleton-container">
+            <div class="hero-skeleton-container" style="position:relative;">
                 <canvas id="hero-skeleton" width="420" height="520"></canvas>
                 <div class="hero-canvas-overlay">
-                    <span class="live-badge">LIVE PREVIEW</span>
+                    <span class="live-badge">LIVE AI TRACKING</span>
                 </div>
             </div>
         </div>
@@ -114,21 +132,74 @@
                     <div class="step-number">01</div>
                     <div class="step-icon">🎯</div>
                     <h3>Choose Exercise</h3>
-                    <p>Pick from 5 exercises. Each has a pre-trained baseline model capturing ideal form metrics.</p>
+                    <p>Pick from 7 exercises or follow a structured program. Each has a pre-trained AI baseline for ideal form detection.</p>
                 </div>
                 <div class="step-card glass-card">
                     <div class="step-number">02</div>
                     <div class="step-icon">📡</div>
                     <h3>Camera Tracks You</h3>
-                    <p>MediaPipe detects 33 body landmarks at 30 FPS entirely in your browser. No data leaves your device.</p>
+                    <p>MediaPipe detects 33 body landmarks at 30 FPS entirely in your browser. No data ever leaves your device.</p>
                 </div>
                 <div class="step-card glass-card">
                     <div class="step-number">03</div>
                     <div class="step-icon">🧠</div>
                     <h3>AI Coaches You</h3>
-                    <p>The AI compares your angles, speed, and range of motion against the baseline and gives instant feedback.</p>
+                    <p>The AI compares your joint angles, movement speed, and range against the baseline — giving instant spoken and visual corrections every rep.</p>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- For Gym Owners -->
+    <div class="gym-section">
+        <div class="gym-inner">
+            <div class="gym-badge">🏋️ For Gym Owners</div>
+            <h2 class="gym-title">Turn Your Gym Into a<br><span class="text-accent">Smart Fitness Studio</span></h2>
+            <p class="gym-subtitle">
+                Give every member access to an AI personal trainer — without the cost of hiring one.
+                FormAI runs on any tablet or laptop, mounts to any gym station, and works instantly.
+            </p>
+            <div class="gym-benefits-grid">
+                <div class="gym-benefit">
+                    <div class="gym-benefit-icon">🤖</div>
+                    <div>
+                        <h4>AI Coach for Every Member</h4>
+                        <p>Instant form correction and rep counting for each person on each exercise — simultaneously, at no extra cost per user.</p>
+                    </div>
+                </div>
+                <div class="gym-benefit">
+                    <div class="gym-benefit-icon">📊</div>
+                    <div>
+                        <h4>Automatic Progress Tracking</h4>
+                        <p>Every session is logged. Members see their rep counts, form scores, and streaks. You get data on member engagement.</p>
+                    </div>
+                </div>
+                <div class="gym-benefit">
+                    <div class="gym-benefit-icon">🔌</div>
+                    <div>
+                        <h4>Plug & Play — No IT Needed</h4>
+                        <p>Mount a tablet, open a browser, done. No app installation, no hardware, no maintenance. Updates happen automatically.</p>
+                    </div>
+                </div>
+                <div class="gym-benefit">
+                    <div class="gym-benefit-icon">🔒</div>
+                    <div>
+                        <h4>100% Private & Secure</h4>
+                        <p>All AI processing runs locally in the browser. Camera feeds and workout data never leave your gym's network.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="gym-cta-row">
+                <a href="#exercises" class="btn btn-primary btn-lg">Try It Free</a>
+                <a href="#admin" class="btn btn-glass btn-lg">⚙ Trainer Setup</a>
+            </div>
+            <div class="pricing-strip">
+                <span style="font-size:.8rem;color:var(--text-muted);font-weight:600;">Subscription plans:</span>
+                <span class="pricing-chip">Starter — 1 Station</span>
+                <span class="pricing-chip featured">Pro — Up to 5 Stations</span>
+                <span class="pricing-chip">Enterprise — Unlimited</span>
+            </div>
+            <span class="pricing-note">Contact us for pricing. White-label and custom exercise training available.</span>
         </div>
     </div>
 
@@ -144,13 +215,13 @@
                 </div>
                 <div class="feature-card glass-card">
                     <div class="feature-icon">🧠</div>
-                    <h3>Smart Feedback</h3>
-                    <p>AI compares your form against trained baselines and gives specific, actionable corrections per rep.</p>
+                    <h3>Smart Rep Counting</h3>
+                    <p>Counts reps automatically using biomechanics-calibrated thresholds — accurately at any speed.</p>
                 </div>
                 <div class="feature-card glass-card">
                     <div class="feature-icon">📊</div>
-                    <h3>Rep Analytics</h3>
-                    <p>Track ROM, speed, form quality, and improvement across sessions with a detailed dashboard.</p>
+                    <h3>Personal Records</h3>
+                    <p>Track your best rep counts and form scores per exercise. Beat your records to stay motivated.</p>
                 </div>
                 <div class="feature-card glass-card">
                     <div class="feature-icon">🔊</div>
@@ -158,9 +229,9 @@
                     <p>Hands-free audio feedback tells you exactly what to fix while you exercise — no stopping needed.</p>
                 </div>
                 <div class="feature-card glass-card">
-                    <div class="feature-icon">🔒</div>
-                    <h3>100% Private</h3>
-                    <p>All processing runs locally in your browser. Your camera feed never leaves your device.</p>
+                    <div class="feature-icon">📋</div>
+                    <h3>Workout Programs</h3>
+                    <p>Follow structured programs like Beginner Basics, Upper Body Power, or Full Body Burn.</p>
                 </div>
                 <div class="feature-card glass-card">
                     <div class="feature-icon">🔄</div>
@@ -179,7 +250,7 @@
     <div class="page-container">
         <div class="page-header">
             <h1 class="page-title">Choose Your <span class="text-accent">Exercise</span></h1>
-            <p class="page-subtitle">Select an exercise to start your AI-coached session</p>
+            <p class="page-subtitle">Select an exercise to start your AI-coached session. The AI tracks your form and counts every rep.</p>
         </div>
         <div class="category-filters">
             <button class="filter-btn active" data-category="all">All</button>
@@ -188,6 +259,21 @@
             <button class="filter-btn" data-category="Flexibility">🧘 Flexibility</button>
         </div>
         <div class="exercise-grid" id="exercise-grid"></div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════
+     PAGE: Programs
+═══════════════════════════════════════════════════ -->
+<section id="page-programs" class="page">
+    <div class="page-container">
+        <div class="page-header">
+            <h1 class="page-title">Workout <span class="text-accent">Programs</span></h1>
+            <p class="page-subtitle">Structured training plans designed by exercise scientists. Follow a program to train smarter, not harder.</p>
+        </div>
+        <div id="programs-content">
+            <!-- Filled by JS: either program grid or program detail -->
+        </div>
     </div>
 </section>
 
@@ -271,7 +357,7 @@
                 </div>
             </div>
 
-            <!-- Controls (mobile: full-width strip; desktop: row) -->
+            <!-- Controls -->
             <div class="coach-controls">
                 <button class="btn btn-primary" id="btn-start-session">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -298,10 +384,10 @@
             </div>
         </div>
 
-        <!-- Stats panel — mobile: compact strip below video; desktop: sidebar -->
+        <!-- Stats panel -->
         <div class="coach-stats-panel">
 
-            <!-- ── Mobile-only widgets ── -->
+            <!-- Mobile-only widgets -->
             <div class="mobile-rep-row">
                 <div>
                     <span class="mobile-rep-label">Reps</span>
@@ -338,7 +424,7 @@
                 </div>
             </div>
 
-            <!-- ── Desktop-only stat cards (CSS hides on mobile) ── -->
+            <!-- Desktop stat cards -->
             <div class="stat-card glass-card rep-counter-card">
                 <h3 class="stat-card-label">Reps Completed</h3>
                 <div class="rep-ring-container">
@@ -420,9 +506,10 @@
     <div class="page-container">
         <div class="page-header">
             <h1 class="page-title">Your <span class="text-accent">Dashboard</span></h1>
-            <p class="page-subtitle">Track your training progress and session history</p>
+            <p class="page-subtitle" id="dash-greeting">Track your training progress and personal records</p>
         </div>
 
+        <!-- Overview stats -->
         <div class="dashboard-stats" id="dashboard-stats">
             <div class="dash-stat-card glass-card">
                 <div class="dash-stat-icon">🏋️</div>
@@ -440,9 +527,22 @@
                 <div class="dash-stat-label">Training Time</div>
             </div>
             <div class="dash-stat-card glass-card">
-                <div class="dash-stat-icon">⭐</div>
-                <div class="dash-stat-value" id="dash-avg-quality">--</div>
-                <div class="dash-stat-label">Avg Quality</div>
+                <div class="dash-stat-icon">🔥</div>
+                <div class="dash-stat-value" id="dash-streak">0</div>
+                <div class="dash-stat-label">Day Streak</div>
+            </div>
+        </div>
+
+        <!-- Personal Records -->
+        <div class="dash-section" id="dash-pr-section">
+            <h2 class="section-title" style="text-align:left;font-size:1.3rem;margin-bottom:1rem;">
+                Personal <span class="text-accent">Records</span>
+            </h2>
+            <div class="pr-grid" id="pr-grid">
+                <div class="pr-card" style="grid-column:1/-1;text-align:center;padding:2rem;">
+                    <div style="font-size:2rem;opacity:.4;margin-bottom:.5rem;">🏆</div>
+                    <p style="color:var(--text-muted);font-size:.85rem;">Complete sessions to set personal records</p>
+                </div>
             </div>
         </div>
 
@@ -502,6 +602,7 @@
             <div class="modal-quality-bar">
                 <div class="modal-quality-bar-fill" id="modal-quality-bar-fill"></div>
             </div>
+            <p id="modal-pr-line" style="font-size:.85rem;color:var(--accent-amber);font-weight:600;margin-bottom:.75rem;display:none;"></p>
         </div>
         <div class="modal-actions">
             <button class="btn btn-primary" id="modal-restart">Train Again</button>
@@ -517,23 +618,19 @@
     <div class="page-container">
         <div class="page-header">
             <h1 class="page-title">⚙ <span class="text-accent">Trainer</span> Studio</h1>
-            <p class="page-subtitle">Record your own reps to train the AI baseline for any exercise</p>
+            <p class="page-subtitle">Record your own reps to customise the AI baseline for any exercise. Gym-owner setup tool.</p>
         </div>
 
-        <!-- ── Setup Panel ── -->
+        <!-- Setup Panel -->
         <div id="trainer-setup" class="trainer-setup-grid">
-
-            <!-- Config card -->
             <div class="glass-card trainer-config-card">
                 <h3 class="stat-card-label">Exercise Setup</h3>
-
                 <div class="trainer-field">
                     <label class="trainer-label">Exercise</label>
                     <select id="trainer-exercise-select" class="trainer-select">
                         <option value="">Loading exercises…</option>
                     </select>
                 </div>
-
                 <div class="trainer-field">
                     <label class="trainer-label">Target Reps to Record</label>
                     <div class="trainer-reps-row">
@@ -541,27 +638,23 @@
                                value="10" min="3" max="50" step="1">
                         <span class="trainer-reps-hint">reps</span>
                     </div>
-                    <p class="trainer-hint">More reps = better statistical model. 8–15 recommended.</p>
+                    <p class="trainer-hint">More reps = better model. 8–15 recommended.</p>
                 </div>
-
                 <div class="trainer-field">
                     <label class="trainer-label">Instructions</label>
                     <ol class="trainer-instructions">
                         <li>Select an exercise and set target reps</li>
-                        <li>Stand in front of your camera so your full body is visible</li>
+                        <li>Stand in front of camera so your full body is visible</li>
                         <li>Click <strong>Start Recording</strong> and perform the reps</li>
-                        <li>The system counts reps automatically — stop or let it auto-stop</li>
-                        <li>Review the stats, then <strong>Save Baseline</strong> to apply</li>
+                        <li>System counts reps automatically</li>
+                        <li>Review stats, then <strong>Save Baseline</strong></li>
                     </ol>
                 </div>
-
                 <button id="btn-trainer-begin" class="btn btn-primary btn-trainer-begin">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                     Open Camera
                 </button>
             </div>
-
-            <!-- Info card -->
             <div class="glass-card trainer-info-card">
                 <h3 class="stat-card-label">How Baseline Training Works</h3>
                 <div class="trainer-info-grid">
@@ -569,33 +662,31 @@
                         <div class="trainer-info-icon">📐</div>
                         <div>
                             <strong>Joint Angles</strong>
-                            <p>6 key joints tracked: knees, elbows, hips. Min/max/avg/std computed per joint across all reps.</p>
+                            <p>6 key joints tracked. Min/max/avg/std computed across all reps for accurate form detection.</p>
                         </div>
                     </div>
                     <div class="trainer-info-item">
                         <div class="trainer-info-icon">⚡</div>
                         <div>
                             <strong>Movement Speed</strong>
-                            <p>Angular velocity (°/s) per joint. Coaches users who move too fast or too slow compared to baseline.</p>
+                            <p>Angular velocity (°/s) per joint — coaches users who move too fast or too slow.</p>
                         </div>
                     </div>
                     <div class="trainer-info-item">
                         <div class="trainer-info-icon">🎭</div>
                         <div>
                             <strong>Motion Avatar</strong>
-                            <p>Every frame recorded as normalized landmark positions. Used for the demo replay overlay in coach mode.</p>
+                            <p>Every frame recorded as landmarks — used for the demo replay overlay in coaching mode.</p>
                         </div>
                     </div>
                     <div class="trainer-info-item">
-                        <div class="trainer-info-icon">🎯</div>
+                        <div class="trainer-info-icon">🔬</div>
                         <div>
-                            <strong>ROM Analysis</strong>
-                            <p>Range of motion thresholds set from your baseline. Users coached on depth, extension, and alignment.</p>
+                            <strong>Built-in Baselines</strong>
+                            <p>Research-based defaults from sports science literature are used until you record your own.</p>
                         </div>
                     </div>
                 </div>
-
-                <!-- Existing baselines status -->
                 <div class="trainer-baselines-status" id="trainer-baselines-status">
                     <h4 class="trainer-baselines-title">Current Baselines</h4>
                     <div class="trainer-baseline-list" id="trainer-baseline-list">
@@ -605,25 +696,18 @@
             </div>
         </div>
 
-        <!-- ── Recording Panel (hidden until camera opens) ── -->
+        <!-- Recording Panel -->
         <div id="trainer-recording-panel" class="trainer-recording-panel" style="display:none">
-
-            <!-- Phase banner -->
             <div class="trainer-phase-banner">
                 <div class="trainer-phase-label" id="trainer-phase-label">READY</div>
                 <div class="trainer-phase-sub" id="trainer-phase-sub">Click Start Recording when positioned</div>
             </div>
-
             <div class="trainer-rec-layout">
-
-                <!-- Left: camera -->
                 <div class="trainer-video-wrap">
                     <div class="session-progress-bar" id="trainer-progress-bar"></div>
                     <div class="video-container" id="trainer-video-container">
                         <video id="trainer-video" autoplay playsinline muted></video>
                         <canvas id="trainer-canvas"></canvas>
-
-                        <!-- Top overlay -->
                         <div class="video-overlay-top">
                             <div class="exercise-badge" id="trainer-exercise-badge">Exercise</div>
                             <div class="top-badges-right">
@@ -631,20 +715,14 @@
                                 <div class="status-badge" id="trainer-status-badge">IDLE</div>
                             </div>
                         </div>
-
-                        <!-- Rec indicator -->
                         <div class="trainer-rec-dot" id="trainer-rec-dot" style="display:none">
                             <span class="rec-dot-blink"></span> REC
                         </div>
-
-                        <!-- Loading -->
                         <div class="video-loading" id="trainer-video-loading">
                             <div class="loading-spinner"></div>
                             <p>Initializing Camera…</p>
                         </div>
                     </div>
-
-                    <!-- Controls -->
                     <div class="trainer-controls">
                         <button class="btn btn-primary" id="btn-trainer-record">
                             <span class="rec-dot-blink" style="margin-right:.4rem"></span>
@@ -652,7 +730,7 @@
                         </button>
                         <button class="btn btn-danger" id="btn-trainer-stop-rec" style="display:none">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
-                            Stop Recording
+                            Stop
                         </button>
                         <button class="btn btn-glass" id="btn-trainer-back">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
@@ -660,11 +738,7 @@
                         </button>
                     </div>
                 </div>
-
-                <!-- Right: live stats -->
                 <div class="trainer-live-stats">
-
-                    <!-- Rep counter -->
                     <div class="glass-card trainer-stat-card">
                         <h4 class="stat-card-label">Reps Recorded</h4>
                         <div class="trainer-rep-display">
@@ -676,8 +750,6 @@
                             <div class="trainer-rep-bar" id="trainer-rep-bar"></div>
                         </div>
                     </div>
-
-                    <!-- Phase + angle -->
                     <div class="glass-card trainer-stat-card">
                         <h4 class="stat-card-label">Current State</h4>
                         <div class="trainer-state-row">
@@ -701,14 +773,10 @@
                             </div>
                         </div>
                     </div>
-
-                    <!-- Live angle mini-chart -->
                     <div class="glass-card trainer-stat-card">
                         <h4 class="stat-card-label">Angle History</h4>
                         <canvas class="trainer-angle-chart" id="trainer-angle-chart" width="220" height="70"></canvas>
                     </div>
-
-                    <!-- Frame count -->
                     <div class="glass-card trainer-stat-card">
                         <h4 class="stat-card-label">Data Collected</h4>
                         <div class="trainer-data-row">
@@ -724,50 +792,32 @@
             </div>
         </div>
 
-        <!-- ── Results Panel (shown after recording) ── -->
+        <!-- Results Panel -->
         <div id="trainer-results-panel" class="trainer-results-panel" style="display:none">
-
             <div class="trainer-results-header">
                 <div class="trainer-results-badge">✅ Baseline Computed</div>
                 <h2 class="trainer-results-title">Recording Complete</h2>
                 <p class="trainer-results-sub" id="trainer-results-sub">Ready to save</p>
             </div>
-
             <div class="trainer-results-grid">
-
-                <!-- Stats table -->
                 <div class="glass-card trainer-results-card">
                     <h3 class="stat-card-label">Joint Statistics</h3>
-                    <div class="trainer-stats-table" id="trainer-stats-table">
-                        <!-- filled by JS -->
-                    </div>
+                    <div class="trainer-stats-table" id="trainer-stats-table"></div>
                 </div>
-
-                <!-- Summary card -->
                 <div class="glass-card trainer-results-card">
                     <h3 class="stat-card-label">Session Summary</h3>
-                    <div class="trainer-summary-list" id="trainer-summary-list">
-                        <!-- filled by JS -->
-                    </div>
-
+                    <div class="trainer-summary-list" id="trainer-summary-list"></div>
                     <div class="trainer-save-note">
-                        Saving will overwrite the existing baseline for this exercise and immediately apply to the AI coach.
+                        Saving will override the existing baseline for this exercise and immediately update the AI coach.
                     </div>
-
                     <div class="trainer-result-actions">
-                        <button class="btn btn-primary" id="btn-trainer-save">
-                            💾 Save Baseline
-                        </button>
-                        <button class="btn btn-glass" id="btn-trainer-redo">
-                            🔄 Record Again
-                        </button>
+                        <button class="btn btn-primary" id="btn-trainer-save">💾 Save Baseline</button>
+                        <button class="btn btn-glass" id="btn-trainer-redo">🔄 Record Again</button>
                     </div>
-
                     <div class="trainer-save-status" id="trainer-save-status" style="display:none"></div>
                 </div>
             </div>
         </div>
-
     </div>
 </section>
 
@@ -781,13 +831,13 @@
         <span class="bnt-icon">💪</span>
         <span class="bnt-label">Exercises</span>
     </a>
+    <a href="#programs"  class="bnt-item" data-page="programs">
+        <span class="bnt-icon">📋</span>
+        <span class="bnt-label">Programs</span>
+    </a>
     <a href="#dashboard" class="bnt-item" data-page="dashboard">
         <span class="bnt-icon">📊</span>
         <span class="bnt-label">Progress</span>
-    </a>
-    <a href="#admin"     class="bnt-item" data-page="admin">
-        <span class="bnt-icon">⚙️</span>
-        <span class="bnt-label">Train</span>
     </a>
 </nav>
 

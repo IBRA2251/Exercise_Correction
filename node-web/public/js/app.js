@@ -75,6 +75,7 @@ function navigate(page, params = {}) {
     if (page === 'coach')     initCoachPage(params.exercise);
     if (page === 'dashboard') initDashboardPage();
     if (page === 'admin')     initAdminPage();
+    if (page === 'programs')  initProgramsPage();
 }
 
 function handleHash() {
