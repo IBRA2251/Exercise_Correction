@@ -19,12 +19,14 @@ module.exports = async (req, res) => {
             access: 'public',
             contentType: 'application/json',
             addRandomSuffix: false,
+            allowOverwrite: true,
         });
 
         await put(`motions/${id}_motion.json`, JSON.stringify(motion), {
             access: 'public',
             contentType: 'application/json',
             addRandomSuffix: false,
+            allowOverwrite: true,
         });
 
         res.json({ status: 'saved', exercise: id, reps: model.reps_recorded });
