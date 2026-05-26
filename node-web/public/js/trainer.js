@@ -26,6 +26,15 @@ const TRAINER_PRIMARY_JOINT = {
     stretching: 'left_knee',
 };
 
+// Maps each primary joint to its mirror on the other side
+// Used to automatically select the right-arm primary joint during dual-arm training
+const TRAINER_JOINT_OPPOSITE = {
+    left_elbow:  'right_elbow',
+    right_elbow: 'left_elbow',
+    left_knee:   'right_knee',
+    right_knee:  'left_knee',
+};
+
 const MIN_ANGLE_RANGE = 15;   // mirrors trainer.py MIN_ANGLE_RANGE
 const MIN_REP_GAP_S   = 0.5;  // seconds — mirrors trainer.py MIN_REP_GAP
 const MAX_MOTION_FRAMES = 300; // subsample cap to keep file size reasonable
@@ -81,8 +90,8 @@ class AdminTrainer {
         // Adaptive rep detection (mirrors trainer.py)
         this.repCount     = 0;
         this.repState     = 'top';
-        this.topAngle     = 170;
-        this.bottomAngle  = 10;
+        this.topAngle     = null;        // initialised on first frame (mirrors trainer.py: top_angle = None)
+        this.bottomAngle  = null;        // initialised on first frame (mirrors trainer.py: bottom_angle = None)
         this.lastRepTs    = 0;           // seconds
 
         // Config (set by setup())
@@ -105,12 +114,19 @@ class AdminTrainer {
     }
 
     // ── Setup ─────────────────────────────────────────────────────────────────
-    setup(exercise, targetReps) {
+    // armSide: 'left' (default) | 'right'
+    // When 'right', the primary joint is automatically swapped to its mirror.
+    setup(exercise, targetReps, armSide = 'left') {
         this.exerciseId   = exercise.id;
         this.exerciseName = exercise.name;
         this.exerciseType = exercise.type;
         this.targetReps   = Math.max(3, targetReps);
-        this.primaryJoint = TRAINER_PRIMARY_JOINT[exercise.id] || 'left_knee';
+        this.armSide      = armSide;
+
+        const defaultPrimary = TRAINER_PRIMARY_JOINT[exercise.id] || 'left_knee';
+        this.primaryJoint = (armSide === 'right' && TRAINER_JOINT_OPPOSITE[defaultPrimary])
+            ? TRAINER_JOINT_OPPOSITE[defaultPrimary]
+            : defaultPrimary;
 
         Object.keys(TRAINER_JOINTS).forEach(j => {
             this.jointAngles[j] = [];
@@ -147,8 +163,8 @@ class AdminTrainer {
         this.centroidY   = [];
         this.repCount    = 0;
         this.repState    = 'top';
-        this.topAngle    = 170;
-        this.bottomAngle = 10;
+        this.topAngle    = null;   // seeded from first frame (mirrors trainer.py: top_angle = None)
+        this.bottomAngle = null;   // seeded from first frame (mirrors trainer.py: bottom_angle = None)
         this.lastRepTs   = 0;
         this.prevTs      = performance.now();
 
@@ -210,8 +226,14 @@ class AdminTrainer {
         );
 
         // Adaptive tracking (mirrors trainer.py lines 333-348)
-        this.topAngle    = Math.max(this.topAngle,    pAngle);
-        this.bottomAngle = Math.min(this.bottomAngle, pAngle);
+        // Seed both values from the very first observed angle (same as Python: top_angle = None → set on first frame)
+        if (this.topAngle === null) {
+            this.topAngle    = pAngle;
+            this.bottomAngle = pAngle;
+        } else {
+            this.topAngle    = Math.max(this.topAngle,    pAngle);
+            this.bottomAngle = Math.min(this.bottomAngle, pAngle);
+        }
 
         // Update canvas angle label
         if (this.poseEngine) this.poseEngine.currentAngle = pAngle;
@@ -285,6 +307,7 @@ class AdminTrainer {
             exercise:          this.exerciseId,
             type:              this.exerciseType,
             reps_recorded:     this.repCount,
+            arm_side:          this.armSide,   // 'left' | 'right'
             joints,
             hold_top_avg_s:    holdTopAvg,
             hold_bottom_avg_s: holdBottomAvg,
@@ -299,6 +322,7 @@ class AdminTrainer {
     }
 }
 
-window.AdminTrainer       = AdminTrainer;
-window.TRAINER_JOINTS     = TRAINER_JOINTS;
+window.AdminTrainer          = AdminTrainer;
+window.TRAINER_JOINTS        = TRAINER_JOINTS;
 window.TRAINER_PRIMARY_JOINT = TRAINER_PRIMARY_JOINT;
+window.TRAINER_JOINT_OPPOSITE= TRAINER_JOINT_OPPOSITE;

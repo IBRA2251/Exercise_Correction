@@ -24,6 +24,14 @@ const OPPOSITE_JOINT = {
     right_shoulder:'left_shoulder',
 };
 
+// Reverse map: landmark mid-index → joint name
+// Used by ExerciseSession to know which arm is currently active so it can
+// pull the correct per-arm baseline stats from the model.
+const JOINT_IDX_TO_NAME = {};
+for (const [name, indices] of Object.entries(JOINTS)) {
+    JOINT_IDX_TO_NAME[indices[1]] = name;  // indices[1] = the vertex / mid joint
+}
+
 // ─── 3-point angle (same as coach.py calculate_angle) ────────────────────────
 function calculateAngle(a, b, c) {
     const ba  = [a[0] - b[0], a[1] - b[1]];
@@ -166,6 +174,9 @@ class ExerciseSession {
 
         // Rep quality history (for dots UI)
         this.repQualityHistory = [];
+
+        // Active joint name — updated every frame, used to pick per-arm baseline
+        this._activeJointName = this.config.primary_angle;
     }
 
     start() { this.startTime = performance.now(); this.isRunning = true; }
@@ -235,6 +246,9 @@ class ExerciseSession {
                 }
             }
         }
+
+        // Track active joint name for per-arm baseline selection
+        this._activeJointName = JOINT_IDX_TO_NAME[activeJointIdx] || this.config.primary_angle;
 
         // Speed (deg/s) — uses actual frame delta, not fixed 30fps
         let speed = 0;
@@ -306,7 +320,9 @@ class ExerciseSession {
 
     // Mirrors coach.py single-exercise rep counting (the run() loop logic)
     _checkRepSingle(angle) {
-        const stats = this.model?.joints?.[this.config.primary_angle];
+        // Prefer active arm's baseline; fall back to the exercise primary_angle baseline
+        const stats = this.model?.joints?.[this._activeJointName]
+                   ?? this.model?.joints?.[this.config.primary_angle];
         if (!stats) return false;
 
         const rom = Math.max(stats.max - stats.min, 20);
@@ -384,7 +400,8 @@ class ExerciseSession {
     }
 
     _calcQuality(angle, speed) {
-        const stats = this.model?.joints?.[this.config.primary_angle];
+        const stats = this.model?.joints?.[this._activeJointName]
+                   ?? this.model?.joints?.[this.config.primary_angle];
         if (!stats) return 0;
         const romRange = stats.max - stats.min;
         if (romRange < 1) return 50;
@@ -429,7 +446,9 @@ class ExerciseSession {
     //  with full exercise-specific feedback tables from coach.py
     // ═══════════════════════════════════════════════════════════════
     evaluateRep() {
-        const stats = this.model?.joints?.[this.config.primary_angle];
+        // Use the active arm's stats so feedback is personalised to the arm being exercised
+        const stats = this.model?.joints?.[this._activeJointName]
+                   ?? this.model?.joints?.[this.config.primary_angle];
         if (!stats) return { message: 'Good rep!', errorKey: null };
 
         const romTotal  = stats.max - stats.min;
@@ -626,3 +645,4 @@ window.ExerciseSession  = ExerciseSession;
 window.JOINTS           = JOINTS;
 window.OPPOSITE_JOINT   = OPPOSITE_JOINT;
 window.calculateAngle   = calculateAngle;
+window.JOINT_IDX_TO_NAME= JOINT_IDX_TO_NAME;

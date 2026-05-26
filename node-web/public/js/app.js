@@ -308,8 +308,15 @@ async function initCoachPage(exerciseId) {
     S.exercise = S.exercises.find(e => e.id === exerciseId);
     if (!S.exercise) { location.hash = 'exercises'; return; }
 
+    // Always fetch both model and motion fresh — ensures trainer-recorded data is
+    // used immediately after saving a baseline, and prevents cross-exercise stale data.
+    S.model      = null;
+    S.motionData = null;
     Progress.start();
-    S.model = await API.getModel(exerciseId);
+    [S.model, S.motionData] = await Promise.all([
+        API.getModel(exerciseId),
+        API.getMotionData(exerciseId),
+    ]);
     Progress.done();
 
     // Reset UI — desktop + mobile
@@ -414,9 +421,10 @@ async function startSession() {
     S.goodStreak = 0;
     hideElement('streak-badge');
 
-    // Load motion data for avatar demo
+    // Motion data was pre-loaded in initCoachPage() — always fresh trainer-recorded data.
+    // Fall back to a live fetch only if initCoachPage() was somehow skipped.
     if (!S.motionData) {
-        S.motionData = await API.getMotionData(S.exercise.id);
+        S.motionData = await API.getMotionData(S.exercise.id) || null;
     }
 
     // Wire auto-replay
@@ -495,14 +503,19 @@ async function startSession() {
         }
     }, 1000);
 
-    // Start avatar reference panel
+    // Start avatar reference panel (only when trainer motion data exists)
     startAvatarRef();
 
     // Status badge
     setText('session-status-badge', 'LIVE');
     setClass('session-status-badge', 'running');
     show('btn-stop-session'); hide('btn-start-session');
-    show('btn-replay-demo');
+    // Show replay/avatar button only when motion file exists
+    if (S.motionData && S.motionData.length) {
+        show('btn-replay-demo');
+    } else {
+        hide('btn-replay-demo');
+    }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -539,6 +552,10 @@ function stopSession() {
 
     const summary = S.session.getSummary();
     API.saveSession(summary);
+
+    // Keep S.motionData loaded so the "Replay Demo" in the modal still works.
+    // It will be refreshed on the next initCoachPage() call.
+
     showSessionModal(summary);
 }
 
@@ -836,6 +853,15 @@ class MannequinRenderer {
 }
 
 // ═══════════════════════════════════════════════════════
+//  MOTION MIRROR HELPER
+//  Flip x-coordinates so right-arm motion renders on the
+//  correct (right) side of the avatar.
+// ═══════════════════════════════════════════════════════
+function mirrorMotionFrame(frame) {
+    return frame.map(([x, y]) => [1 - x, y]);
+}
+
+// ═══════════════════════════════════════════════════════
 //  AVATAR DEMO PLAYBACK
 // ═══════════════════════════════════════════════════════
 function playAvatarDemo() {
@@ -860,6 +886,10 @@ function playAvatarDemo() {
         const modelStats = S.model?.joints?.[exCfg.primary_angle];
         const jDef       = JOINTS[exCfg.primary_angle];
 
+        // Capture arm-side once at demo start.
+        // If the active joint is right-side, we mirror x so the avatar shows the correct arm.
+        const shouldMirror = (S.session?._activeJointName ?? '').startsWith('right_');
+
         let frameIdx = 0, demoReps = 0, demoRepState = 'top', raf = null;
         const MAX_REPS = 2;
 
@@ -870,13 +900,15 @@ function playAvatarDemo() {
                 overlay.style.display = 'none';
                 resolve(); return;
             }
-            const lm = motion[frameIdx % motion.length];
+            const rawLm = motion[frameIdx % motion.length];
+            // Mirror for rendering only — angle calc uses original coords for rep counting
+            const lm = shouldMirror ? mirrorMotionFrame(rawLm) : rawLm;
             mr.update(lm); mr.render();
 
             if (jDef && modelStats) {
                 const [ia,ib,ic] = jDef;
-                if (ia < lm.length && ib < lm.length && ic < lm.length) {
-                    const angle = calculateAngle([lm[ia][0],lm[ia][1]],[lm[ib][0],lm[ib][1]],[lm[ic][0],lm[ic][1]]);
+                if (ia < rawLm.length && ib < rawLm.length && ic < rawLm.length) {
+                    const angle = calculateAngle([rawLm[ia][0],rawLm[ia][1]],[rawLm[ib][0],rawLm[ib][1]],[rawLm[ic][0],rawLm[ic][1]]);
                     if (angle < modelStats.min + 10 && demoRepState === 'top')         { demoRepState = 'bottom'; }
                     else if (angle > modelStats.max - 10 && demoRepState === 'bottom') { demoRepState = 'top'; demoReps++; }
                 }
@@ -911,7 +943,10 @@ function startAvatarRef() {
     let idx = 0;
     function loop() {
         S.avatarRefRAF = requestAnimationFrame(loop);
-        const lm = S.motionData[idx % S.motionData.length];
+        const rawLm = S.motionData[idx % S.motionData.length];
+        // Mirror dynamically — follows whichever arm the coach is currently tracking
+        const shouldMirror = (S.session?._activeJointName ?? '').startsWith('right_');
+        const lm = shouldMirror ? mirrorMotionFrame(rawLm) : rawLm;
         mr.update(lm); mr.render();
         idx = (idx + 1) % S.motionData.length;
     }
@@ -1106,13 +1141,38 @@ API.saveBaseline = function(exerciseId, model, motion) {
 // Check which baselines exist
 API.checkBaseline = function(exerciseId) { return this.get(`/api/models/${exerciseId}`); };
 
+// ── Merge left + right arm models into a single baseline ─────────────────────
+// Strategy: start with the left-arm model (which has correct left-side joint
+// stats), then overwrite all right-side joints with data from the right-arm
+// recording. Each arm's joints are properly trained only when that arm is the
+// one actively exercising.
+function mergeArmModels(leftModel, rightModel) {
+    const merged = JSON.parse(JSON.stringify(leftModel));   // deep clone
+    for (const [jName, stats] of Object.entries(rightModel.joints)) {
+        if (jName.startsWith('right_')) {
+            merged.joints[jName] = stats;
+        }
+    }
+    merged.both_arms_trained   = true;
+    merged.reps_recorded_left  = leftModel.reps_recorded;
+    merged.reps_recorded_right = rightModel.reps_recorded;
+    return merged;
+}
+
 const AT = {
-    trainer:      null,      // AdminTrainer instance
-    exercise:     null,      // selected exercise
-    angleHistory: [],        // for mini chart
-    model:        null,
-    motion:       null,
-    bound:        false,     // prevent duplicate event listeners
+    trainer:       null,      // AdminTrainer instance
+    exercise:      null,      // selected exercise
+    targetReps:    10,        // reps target (shared by both arms)
+    angleHistory:  [],        // for mini chart
+    model:         null,      // final model sent to saveBaseline (merged when both arms trained)
+    motion:        null,      // final motion (always left-arm motion for avatar)
+    // ── Dual-arm training state ──────────────────────────────────────────────
+    leftArmModel:  null,      // result from left-arm recording
+    leftArmMotion: null,
+    rightArmModel: null,      // result from right-arm recording
+    armPhase:      'left',    // 'left' | 'awaiting_right' | 'right' | 'complete'
+    // ────────────────────────────────────────────────────────────────────────
+    bound:         false,     // prevent duplicate event listeners
 };
 
 async function initAdminPage() {
@@ -1133,12 +1193,14 @@ async function initAdminPage() {
     // Bind buttons once
     if (!AT.bound) {
         AT.bound = true;
-        document.getElementById('btn-trainer-begin')?.addEventListener('click', openTrainerCamera);
+        document.getElementById('btn-trainer-begin')?.addEventListener('click', () => openTrainerCamera('left'));
         document.getElementById('btn-trainer-record')?.addEventListener('click', startTrainerRecording);
         document.getElementById('btn-trainer-stop-rec')?.addEventListener('click', stopTrainerRecording);
         document.getElementById('btn-trainer-back')?.addEventListener('click', resetTrainerToSetup);
         document.getElementById('btn-trainer-save')?.addEventListener('click', saveBaseline);
         document.getElementById('btn-trainer-redo')?.addEventListener('click', resetTrainerToSetup);
+        // Train right arm — shown in results panel after left arm completes
+        document.getElementById('btn-trainer-right-arm')?.addEventListener('click', () => openTrainerCamera('right'));
     }
 
     // Show setup panel, hide others
@@ -1165,32 +1227,59 @@ function showTrainerPanel(which) {
     document.getElementById('trainer-results-panel').style.display  = which === 'results'   ? '' : 'none';
 }
 
-async function openTrainerCamera() {
-    const sel    = document.getElementById('trainer-exercise-select');
-    const repInp = document.getElementById('trainer-reps-target');
-    if (!sel || !sel.value) return;
+// armSide: 'left' (first recording) | 'right' (second recording)
+async function openTrainerCamera(armSide = 'left') {
+    // On a fresh left-arm start, read exercise + reps from the form.
+    // On a right-arm start, reuse the same exercise (don't re-read the select).
+    if (armSide === 'left') {
+        const sel    = document.getElementById('trainer-exercise-select');
+        const repInp = document.getElementById('trainer-reps-target');
+        if (!sel || !sel.value) return;
 
-    AT.exercise = S.exercises.find(e => e.id === sel.value);
-    if (!AT.exercise) return;
+        AT.exercise = S.exercises.find(e => e.id === sel.value);
+        if (!AT.exercise) return;
 
-    const targetReps = parseInt(repInp?.value || '10', 10);
+        AT.targetReps    = parseInt(repInp?.value || '10', 10);
+        // Reset dual-arm state
+        AT.leftArmModel  = null;
+        AT.leftArmMotion = null;
+        AT.rightArmModel = null;
+        AT.armPhase      = 'left';
+    } else {
+        // Right arm — exercise must already be set
+        if (!AT.exercise) return;
+        AT.armPhase = 'right';
+    }
+
+    const targetReps = AT.targetReps || 10;
+
+    // Determine primary joint for this arm
+    const defaultPrimary = TRAINER_PRIMARY_JOINT[AT.exercise.id] || 'left_knee';
+    const primaryJoint   = (armSide === 'right' && TRAINER_JOINT_OPPOSITE[defaultPrimary])
+        ? TRAINER_JOINT_OPPOSITE[defaultPrimary]
+        : defaultPrimary;
 
     // Tear down any previous trainer
     if (AT.trainer) { AT.trainer.stopCamera(); AT.trainer = null; }
     AT.trainer = new AdminTrainer();
-    AT.trainer.setup(AT.exercise, targetReps);
+    AT.trainer.setup(AT.exercise, targetReps, armSide);
     AT.angleHistory = [];
 
     // Show recording panel
     showTrainerPanel('recording');
 
-    // Fill display labels
-    document.getElementById('trainer-exercise-badge').textContent = AT.exercise.name;
+    // Fill display labels — show which arm is being trained
+    const armLabel = armSide === 'right' ? 'Right Arm' : 'Left Arm';
+    document.getElementById('trainer-exercise-badge').textContent =
+        `${AT.exercise.name} — ${armLabel}`;
     document.getElementById('trainer-rep-target-disp').textContent = targetReps;
     document.getElementById('trainer-primary-joint-disp').textContent =
-        (TRAINER_PRIMARY_JOINT[AT.exercise.id] || 'left_knee').replace(/_/g, ' ');
+        primaryJoint.replace(/_/g, ' ');
 
-    setTrainerPhase('READY', 'Click Start Recording when positioned');
+    setTrainerPhase(
+        armSide === 'right' ? 'RIGHT ARM READY' : 'LEFT ARM READY',
+        'Click Start Recording when positioned'
+    );
     document.getElementById('trainer-rep-count').textContent = '0';
     document.getElementById('trainer-angle-val').textContent = '—°';
     document.getElementById('trainer-top-angle').textContent = '—°';
@@ -1205,11 +1294,13 @@ async function openTrainerCamera() {
     show('btn-trainer-record'); hide('btn-trainer-stop-rec');
     document.getElementById('trainer-video-loading').style.display = 'flex';
 
-    // Wire callbacks
+    // Wire callbacks (same for both arms)
     AT.trainer.onAngle = (deg) => {
         setText('trainer-angle-val', `${deg}°`);
-        setText('trainer-top-angle', `${Math.round(AT.trainer.topAngle)}°`);
-        setText('trainer-bot-angle', `${Math.round(AT.trainer.bottomAngle)}°`);
+        setText('trainer-top-angle',
+            AT.trainer.topAngle    !== null ? `${Math.round(AT.trainer.topAngle)}°`    : '—°');
+        setText('trainer-bot-angle',
+            AT.trainer.bottomAngle !== null ? `${Math.round(AT.trainer.bottomAngle)}°` : '—°');
         setText('trainer-frame-count', AT.trainer.motionFrames.length);
 
         // Live angle chart
@@ -1241,13 +1332,28 @@ async function openTrainerCamera() {
     };
 
     AT.trainer.onComplete = (model, motion) => {
-        AT.model  = model;
-        AT.motion = motion;
         document.getElementById('trainer-rec-dot').style.display = 'none';
         document.getElementById('trainer-status-badge').textContent = 'DONE';
         document.getElementById('trainer-status-badge').className = 'status-badge';
         hide('btn-trainer-stop-rec'); show('btn-trainer-record');
-        showTrainerResults(model, motion);
+
+        if (armSide === 'left') {
+            // ── Left arm done: store result, prompt to train right arm ──────
+            AT.leftArmModel  = model;
+            AT.leftArmMotion = motion;
+            AT.model         = model;
+            AT.motion        = motion;
+            AT.armPhase      = 'awaiting_right';
+            showTrainerResults(model, motion);
+        } else {
+            // ── Right arm done: merge both arms into one model ───────────────
+            AT.rightArmModel = model;
+            const merged = mergeArmModels(AT.leftArmModel, AT.rightArmModel);
+            AT.model         = merged;
+            AT.motion        = AT.leftArmMotion;   // keep left-arm motion for avatar demo
+            AT.armPhase      = 'complete';
+            showTrainerResults(merged, AT.leftArmMotion);
+        }
     };
 
     AT.trainer.onError = (msg) => {
@@ -1259,14 +1365,7 @@ async function openTrainerCamera() {
             document.getElementById('trainer-video'),
             document.getElementById('trainer-canvas')
         );
-
-        // Replace fps display id for trainer canvas
-        const fpsBadge = document.getElementById('trainer-fps-display');
-        if (fpsBadge) {
-            // trainer video loading hidden by PoseEngine itself (it checks 'video-loading')
-            // Override: manually hide our trainer loading div
-            document.getElementById('trainer-video-loading').style.display = 'none';
-        }
+        // PoseEngine.init() hides both 'video-loading' and 'trainer-video-loading'
     } catch (err) {
         document.getElementById('trainer-video-loading').innerHTML = `
             <div style="text-align:center;padding:2rem">
@@ -1303,7 +1402,13 @@ function stopTrainerRecording() {
 
 function resetTrainerToSetup() {
     if (AT.trainer) { AT.trainer.stopCamera(); AT.trainer = null; }
-    AT.model = null; AT.motion = null; AT.angleHistory = [];
+    AT.model         = null;
+    AT.motion        = null;
+    AT.leftArmModel  = null;
+    AT.leftArmMotion = null;
+    AT.rightArmModel = null;
+    AT.armPhase      = 'left';
+    AT.angleHistory  = [];
     showTrainerPanel('setup');
     refreshBaselineChips();
 }
@@ -1352,13 +1457,39 @@ function drawAngleChart() {
 function showTrainerResults(model, motion) {
     showTrainerPanel('results');
 
+    // ── Arm status badges ──────────────────────────────────────────────────
+    const leftBadge    = document.getElementById('trainer-left-arm-badge');
+    const rightBadge   = document.getElementById('trainer-right-arm-badge');
+    const rightArmBtn  = document.getElementById('btn-trainer-right-arm');
+    const resultsBadge = document.getElementById('trainer-results-badge');
+
+    if (AT.armPhase === 'awaiting_right') {
+        // Left arm done — prompt for right arm
+        if (leftBadge)   { leftBadge.style.display  = 'inline-flex'; }
+        if (rightBadge)  { rightBadge.style.display  = 'none'; }
+        if (rightArmBtn) { rightArmBtn.style.display  = ''; }
+        if (resultsBadge) resultsBadge.textContent = '✅ Left Arm Recorded';
+    } else if (AT.armPhase === 'complete') {
+        // Both arms done
+        if (leftBadge)   { leftBadge.style.display  = 'inline-flex'; }
+        if (rightBadge)  { rightBadge.style.display  = 'inline-flex'; }
+        if (rightArmBtn) { rightArmBtn.style.display  = 'none'; }
+        if (resultsBadge) resultsBadge.textContent = '✅ Both Arms Recorded';
+    } else {
+        // Single-arm or first-time display (shouldn't normally reach here)
+        if (leftBadge)   { leftBadge.style.display  = 'inline-flex'; }
+        if (rightBadge)  { rightBadge.style.display  = 'none'; }
+        if (rightArmBtn) { rightArmBtn.style.display  = 'none'; }
+    }
+
     const primaryJ = TRAINER_PRIMARY_JOINT[model.exercise] || 'left_knee';
 
     // ── Summary ──────────────────────────────────────────
     const exerciseName = AT.exercise?.name || model.exercise;
     const summary = [
         { k: 'Exercise',       v: exerciseName },
-        { k: 'Reps Recorded',  v: model.reps_recorded },
+        { k: 'Reps (Left)',    v: model.both_arms_trained ? model.reps_recorded_left  : model.reps_recorded },
+        { k: 'Reps (Right)',   v: model.both_arms_trained ? model.reps_recorded_right : '—' },
         { k: 'Primary Joint',  v: primaryJ.replace(/_/g,' ') },
         { k: 'Motion Frames',  v: motion.length },
         { k: 'Hold Top',       v: `${model.hold_top_avg_s}s avg` },
@@ -1379,8 +1510,11 @@ function showTrainerResults(model, motion) {
     ).join('');
 
     // Sub text
+    const repSummary = model.both_arms_trained
+        ? `${model.reps_recorded_left} left + ${model.reps_recorded_right} right reps`
+        : `${model.reps_recorded} reps`;
     setText('trainer-results-sub',
-        `${model.reps_recorded} reps · ${motion.length} frames recorded · ready to apply`);
+        `${repSummary} · ${motion.length} frames recorded · ready to apply`);
 
     // ── Stats table ──────────────────────────────────────
     const joints = Object.entries(model.joints);
@@ -1429,8 +1563,10 @@ async function saveBaseline() {
             btn.textContent = '✅ Saved!';
             // Refresh chips
             await refreshBaselineChips();
-            // Invalidate cached model so next coach session fetches fresh
-            S.model = null;
+            // Invalidate cached model AND motion so the coach immediately uses
+            // the newly saved trainer-recorded baseline + avatar data on next visit.
+            S.model      = null;
+            S.motionData = null;
         } else {
             throw new Error(result?.error || 'Unknown error');
         }

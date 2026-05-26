@@ -67,8 +67,12 @@ class PoseEngine {
         await this.camera.start();
         this.isReady = true;
 
-        const loading = document.getElementById('video-loading');
-        if (loading) loading.style.display = 'none';
+        // Hide whichever loading overlay is present — coach uses 'video-loading',
+        // trainer uses 'trainer-video-loading'
+        ['video-loading', 'trainer-video-loading'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
     }
 
     _handleResults(results) {
@@ -99,7 +103,8 @@ class PoseEngine {
             this.currentFps  = this.frameCount;
             this.frameCount  = 0;
             this.lastFpsTime = now;
-            const el = document.getElementById('fps-display');
+            // Support both the coach page (#fps-display) and the trainer page (#trainer-fps-display)
+            const el = document.getElementById('fps-display') || document.getElementById('trainer-fps-display');
             if (el) el.textContent = `${this.currentFps} FPS`;
         }
 

@@ -18,8 +18,21 @@ const SESSIONS_FILE = path.join(__dirname, 'sessions.json');
 const PUBLIC_DIR    = path.join(__dirname, 'public');
 
 app.use(cors());
-app.use(express.json());
+// Raise limit to 10 MB — motion payload (300 frames × 33 landmarks) can exceed the default 100 KB
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(PUBLIC_DIR));
+
+// ─── JSON error handler — ensures body-parser errors (413 too large, 400 bad JSON, etc.)
+//     always return JSON, never an HTML page that the client can't parse ─────────────────
+app.use((err, req, res, next) => {
+    if (err.type === 'entity.too.large') {
+        return res.status(413).json({ error: 'Payload too large. Reduce target reps or motion frames.' });
+    }
+    if (err.status === 400 || err.type === 'entity.parse.failed') {
+        return res.status(400).json({ error: 'Invalid JSON in request body.' });
+    }
+    next(err);
+});
 
 // ─── Exercise Catalog (mirrors config.py + web/server.py) ───────────────────
 const EXERCISE_CATALOG = {

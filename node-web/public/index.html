@@ -807,11 +807,18 @@
                 <div class="glass-card trainer-results-card">
                     <h3 class="stat-card-label">Session Summary</h3>
                     <div class="trainer-summary-list" id="trainer-summary-list"></div>
+                    <!-- Arm training status badges -->
+                    <div class="trainer-arm-status" id="trainer-arm-status">
+                        <span class="arm-badge arm-badge-left"  id="trainer-left-arm-badge"  style="display:none">✓ Left Arm</span>
+                        <span class="arm-badge arm-badge-right" id="trainer-right-arm-badge" style="display:none">✓ Right Arm</span>
+                    </div>
+
                     <div class="trainer-save-note">
                         Saving will override the existing baseline for this exercise and immediately update the AI coach.
                     </div>
                     <div class="trainer-result-actions">
                         <button class="btn btn-primary" id="btn-trainer-save">💾 Save Baseline</button>
+                        <button class="btn btn-right-arm" id="btn-trainer-right-arm" style="display:none">💪 Train Right Arm →</button>
                         <button class="btn btn-glass" id="btn-trainer-redo">🔄 Record Again</button>
                     </div>
                     <div class="trainer-save-status" id="trainer-save-status" style="display:none"></div>
